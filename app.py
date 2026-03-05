@@ -183,5 +183,4 @@ def edit_log(log_id):
     return render_template('edit_log.html', log=log)
 
 if __name__ == '__main__':
-    init_system()
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
