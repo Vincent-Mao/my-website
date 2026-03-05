@@ -9,7 +9,8 @@
                 <form method="POST" class="mb-4">
                     <input type="hidden" name="action" value="add">
                     <div class="mb-2"><input type="text" name="name" class="form-control" placeholder="输入新员工姓名" required></div>
-                    <div class="mb-2"><input type="number" step="0.01" name="target_loan" class="form-control" placeholder="首月默认放款指标(万)" value="100" required></div>
+                    <!-- 步长修改为 0.00000001 -->
+                    <div class="mb-2"><input type="number" step="0.00000001" name="target_loan" class="form-control" placeholder="首月默认放款指标(万)" value="100.00000000" required></div>
                     <div class="mb-2"><input type="number" name="target_orders" class="form-control" placeholder="首月默认单量指标" value="10" required></div>
                     <button type="submit" class="btn btn-outline-danger w-100">添加新员工</button>
                 </form>
@@ -60,13 +61,12 @@
                                     <input type="hidden" name="name" value="{{ tgt.name }}">
                                     <input type="hidden" name="month" value="{{ target_month }}">
                                     <td class="fw-bold text-primary">{{ tgt.name }}</td>
-                                    <td width="30%"><input type="number" step="0.01" name="target_loan" class="form-control form-control-sm text-center fw-bold text-danger" value="{{ tgt.target_loan }}"></td>
+                                    <!-- 步长修改为 0.00000001 -->
+                                    <td width="30%"><input type="number" step="0.00000001" name="target_loan" class="form-control form-control-sm text-center fw-bold text-danger" value="{{ "%.8f"|format(tgt.target_loan|float) }}"></td>
                                     <td width="30%"><input type="number" name="target_orders" class="form-control form-control-sm text-center fw-bold" value="{{ tgt.target_orders }}"></td>
                                     <td><button type="submit" class="btn btn-sm btn-success">保存修改</button></td>
                                 </form>
                             </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="text-center py-4 text-muted">请先在左侧添加员工</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -96,7 +96,8 @@
                                 <td class="fw-bold text-primary">{{ log.name }}</td>
                                 <td>{{ log.total_data_count }}</td>
                                 <td>{{ log.loan_orders }}</td>
-                                <td class="text-danger fw-bold">{{ log.loan_amount }}</td>
+                                <!-- 使用 format 格式化显示 -->
+                                <td class="text-danger fw-bold">{{ "%.8f"|format(log.loan_amount|float) }}</td>
                                 <td class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
                                 <td><a href="{{ url_for('edit_log', log_id=log.id) }}" class="btn btn-sm btn-outline-danger py-0">管理员强改</a></td>
                             </tr>
