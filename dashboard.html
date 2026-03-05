@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle text-center">
+        <thead class="table-dark">
+            <tr>
+                <th>姓名</th><th>总数据量</th><th>成单量</th><th>放款额(元)</th><th>件均(元)</th><th>月指标(元)</th><th>单量指标</th><th>达成率</th><th>转化率</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in report %}
+            <tr style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}">
+                <td class="fw-bold text-primary">▶ {{ row.name }}</td>
+                <td>{{ row.total_data_count }}</td>
+                <td>{{ row.loan_orders }}</td>
+                <td class="text-danger fw-bold">{{ "%.2f"|format(row.loan_amount|float * 10000) }}</td>
+                <td>{{ "%.2f"|format(row.avg|float * 10000) }}</td>
+                <td>{{ "%.2f"|format(row.target_loan|float * 10000) }}</td>
+                <td>{{ row.target_orders }}</td>
+                <td>{{ row.achieve }}%</td>
+                <td class="text-primary fw-bold">{{ row.convert }}%</td>
+            </tr>
+            <tr>
+                <td colspan="9" class="p-0">
+                    <div id="collapse-{{ loop.index }}" class="collapse bg-light">
+                        <table class="table table-sm text-center table-bordered m-0">
+                            <thead class="table-secondary" style="font-size: 0.85rem;">
+                                <tr>
+                                    <th>业务日期</th><th>数据总数</th><th>接通</th><th>预审/通过</th>
+                                    <th>终审/通过</th><th>单量</th><th>放款额(元)</th><th>次日预估(元)</th>
+                                </tr>
+                            </thead>
+                            <tbody style="font-size: 0.85rem;">
+                                {% for log in row.daily_logs %}
+                                <tr>
+                                    <td class="fw-bold">{{ log.date }}</td>
+                                    <td>{{ log.total_data_count }}</td>
+                                    <td>{{ log.connected }}</td>
+                                    <td>{{ log.pre_audit }} / {{ log.pre_pass }}</td>
+                                    <td>{{ log.final_audit }} / {{ log.final_pass }}</td>
+                                    <td class="text-danger fw-bold">{{ log.loan_orders }}</td>
+                                    <td class="text-danger fw-bold">{{ "%.2f"|format(log.loan_amount|float * 10000) }}</td>
+                                    <td class="text-primary">{{ "%.2f"|format(log.next_day_est|float * 10000) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-warning fw-bold">
+            <tr>
+                <td>✨ 团队总计</td>
+                <td>{{ team.total_data_count }}</td>
+                <td>{{ team.loan_orders }}</td>
+                <td>{{ "%.2f"|format(team.loan_amount|float * 10000) }}</td>
+                <td>{{ "%.2f"|format(team.avg|float * 10000) }}</td>
+                <td>{{ "%.2f"|format(team.target_loan|float * 10000) }}</td>
+                <td>{{ team.target_orders }}</td>
+                <td>{{ team.achieve }}%</td>
+                <td>{{ team.convert }}%</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endblock %}

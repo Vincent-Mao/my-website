@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow border-primary mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">✏️ 修改历史录入数据</h4>
+                <button type="button" class="btn btn-sm btn-light" onclick="history.back()">取消返回</button>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label class="fw-bold">姓名</label><input type="text" class="form-control bg-light" value="{{ log.name }}" readonly></div>
+                        <div class="col-md-6 mb-3"><label class="fw-bold">业务日期</label><input type="date" class="form-control bg-light" value="{{ log.date }}" readonly></div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-3 mb-3"><label>数据总数</label><input type="number" name="total_data_count" class="form-control" value="{{ log.total_data_count }}" min="0"></div>
+                        <div class="col-md-3 mb-3"><label>数据接通数</label><input type="number" name="connected" class="form-control" value="{{ log.connected }}" min="0"></div>
+                        <div class="col-md-3 mb-3"><label>加微数</label><input type="number" name="added" class="form-control" value="{{ log.added_wechat }}" min="0"></div>
+                        <div class="col-md-3 mb-3"><label>预审数</label><input type="number" name="pre" class="form-control" value="{{ log.pre_audit }}" min="0"></div>
+                        
+                        <div class="col-md-3 mb-3"><label>预审通过数</label><input type="number" name="pre_pass" class="form-control" value="{{ log.pre_pass }}" min="0"></div>
+                        <div class="col-md-3 mb-3"><label>终审</label><input type="number" name="final" class="form-control" value="{{ log.final_audit }}" min="0"></div>
+                        <div class="col-md-3 mb-3"><label>终审通过量</label><input type="number" name="final_pass" class="form-control" value="{{ log.final_pass }}" min="0"></div>
+                        <div class="col-md-3 mb-3"><label class="text-danger fw-bold">放款单量</label><input type="number" name="orders" class="form-control" value="{{ log.loan_orders }}" min="0"></div>
+                        
+                        <!-- 修改 step 为 0.00000001，确保支持输入 8 位小数 -->
+                        <div class="col-md-6 mb-3">
+                            <label class="text-danger fw-bold">放款总额</label>
+                            <input type="number" step="0.00000001" name="amount" class="form-control" value="{{ log.loan_amount|float }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-primary fw-bold">次日预计放款</label>
+                            <input type="number" step="0.00000001" name="next_est" class="form-control" value="{{ log.next_day_est|float }}">
+                        </div>
+                    </div>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">确认修改保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

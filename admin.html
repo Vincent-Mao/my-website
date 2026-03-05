@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row">
+    <!-- 第一排左侧：新增员工 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-danger text-white">⚙️ 员工名册管理</div>
+            <div class="card-body">
+                <form method="POST" class="mb-4">
+                    <input type="hidden" name="action" value="add">
+                    <div class="mb-2"><input type="text" name="name" class="form-control" placeholder="输入新员工姓名" required></div>
+                    <!-- 步长修改为 0.00000001 -->
+                    <div class="mb-2"><input type="number" step="0.00000001" name="target_loan" class="form-control" placeholder="首月默认放款指标(万)" value="100.00000000" required></div>
+                    <div class="mb-2"><input type="number" name="target_orders" class="form-control" placeholder="首月默认单量指标" value="10" required></div>
+                    <button type="submit" class="btn btn-outline-danger w-100">添加新员工</button>
+                </form>
+                <hr>
+                <h6 class="text-muted">现有人员及离职删除</h6>
+                <ul class="list-group">
+                    {% for emp in employees %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                        {{ emp.name }}
+                        <form method="POST" onsubmit="return confirm('警告：确定要删除 {{ emp.name }} 吗？他所有的历史流水和指标将被彻底清空！');">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="name" value="{{ emp.name }}">
+                            <button type="submit" class="btn btn-sm btn-link text-danger">删除</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第一排右侧：指标独立调配 -->
+    <div class="col-md-8">
+        <div class="card shadow-sm mb-4 border-primary">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">🎯 月度独立考核指标设置</h5>
+                <form method="GET" class="d-flex align-items-center m-0">
+                    <label class="me-2 text-white fw-bold text-nowrap">选择月份:</label>
+                    <input type="month" name="target_month" class="form-control form-control-sm" value="{{ target_month }}" onchange="this.form.submit()">
+                </form>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped m-0 align-middle text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th>员工姓名</th>
+                                <th>月放款指标(万)</th>
+                                <th>月单量指标</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tgt in targets %}
+                            <tr>
+                                <form method="POST">
+                                    <input type="hidden" name="action" value="update_target">
+                                    <input type="hidden" name="name" value="{{ tgt.name }}">
+                                    <input type="hidden" name="month" value="{{ target_month }}">
+                                    <td class="fw-bold text-primary">{{ tgt.name }}</td>
+                                    <!-- 步长修改为 0.00000001 -->
+                                    <td width="30%"><input type="number" step="0.00000001" name="target_loan" class="form-control form-control-sm text-center fw-bold text-danger" value="{{ "%.8f"|format(tgt.target_loan|float) }}"></td>
+                                    <td width="30%"><input type="number" name="target_orders" class="form-control form-control-sm text-center fw-bold" value="{{ tgt.target_orders }}"></td>
+                                    <td><button type="submit" class="btn btn-sm btn-success">保存修改</button></td>
+                                </form>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 第二排：底部全宽审计流水 -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">📜 全局数据操作审计日志 (最新 20 条录入/修改)</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover m-0 align-middle text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th>业务日期</th><th>姓名</th><th>数据总数</th><th>成单量</th><th>放款额(万)</th><th>提交/修改时间</th><th>纠错</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td class="fw-bold">{{ log.date }}</td>
+                                <td class="fw-bold text-primary">{{ log.name }}</td>
+                                <td>{{ log.total_data_count }}</td>
+                                <td>{{ log.loan_orders }}</td>
+                                <!-- 使用 format 格式化显示 -->
+                                <td class="text-danger fw-bold">{{ "%.8f"|format(log.loan_amount|float) }}</td>
+                                <td class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td><a href="{{ url_for('edit_log', log_id=log.id) }}" class="btn btn-sm btn-outline-danger py-0">管理员强改</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
