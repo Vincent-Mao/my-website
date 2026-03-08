@@ -199,30 +199,73 @@ def entry():
         return redirect(url_for('entry'))
     return render_template('entry.html', employees=[e.name for e in Employee.query.all()], today=today_str, today_logs=DailyLog.query.filter_by(date=today_str).all())
 
+# ================= 核心修改：admin_panel 路由 =================
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def admin_panel():
+    # 1. 获取当前选中的月份（默认当月）
+    target_month = request.args.get('target_month', datetime.date.today().strftime('%Y-%m'))
+    
     if request.method == 'POST':
         action, name = request.form.get('action'), request.form.get('name')
         try:
             if action == 'add':
+                # 添加员工时，自动为当前月份创建默认目标
                 db.session.add(Employee(name=name))
-                db.session.add(MonthlyTarget(name=name, month=datetime.date.today().strftime('%Y-%m')))
+                db.session.add(MonthlyTarget(name=name, month=target_month))
             elif action == 'delete':
+                # 删除员工时，级联删除所有相关数据
                 Employee.query.filter_by(name=name).delete()
                 DailyLog.query.filter_by(name=name).delete()
                 MonthlyTarget.query.filter_by(name=name).delete()
             elif action == 'update_target':
+                # 更新目标时，没有则创建
                 t = MonthlyTarget.query.filter_by(name=name, month=request.form.get('month')).first()
+                if not t:  # 如果该月份没有目标记录，新建
+                    t = MonthlyTarget(name=name, month=request.form.get('month'))
                 t.target_loan, t.target_orders = float(request.form.get('target_loan')), int(request.form.get('target_orders'))
+                db.session.add(t)  # 新增/更新都用add
             db.session.commit()
             cache.clear()
             flash('操作成功', 'success')
         except Exception as e:
+            db.session.rollback()  # 出错回滚
             print(f"管理员操作错误：{e}")
             flash('操作失败', 'danger')
-    return render_template('admin.html', employees=Employee.query.all(), logs=DailyLog.query.order_by(DailyLog.timestamp.desc()).limit(20).all(), target_month=request.args.get('target_month', datetime.date.today().strftime('%Y-%m')), targets=MonthlyTarget.query.filter_by(month=request.args.get('target_month', datetime.date.today().strftime('%Y-%m'))).all())
+    
+    # 2. 关键修复：先查所有员工，再补全对应月份的目标数据
+    all_employees = Employee.query.all()  # 所有在职员工
+    existing_targets = MonthlyTarget.query.filter_by(month=target_month).all()
+    target_dict = {tgt.name: tgt for tgt in existing_targets}  # 已有目标的员工
+    
+    # 3. 为每个员工生成目标数据（无则初始化默认值）
+    processed_targets = []
+    for emp in all_employees:
+        if emp.name in target_dict:
+            # 已有目标 → 直接用
+            processed_targets.append(target_dict[emp.name])
+        else:
+            # 无目标 → 生成默认目标（不入库，仅前端显示）
+            default_target = MonthlyTarget(
+                name=emp.name,
+                month=target_month,
+                target_loan=100.0,
+                target_orders=10
+            )
+            processed_targets.append(default_target)
+    
+    # 4. 查询日志（保持原有逻辑）
+    logs = DailyLog.query.order_by(DailyLog.timestamp.desc()).limit(20).all()
+    
+    # 5. 传给前端：所有员工 + 处理后的目标 + 选中月份
+    return render_template(
+        'admin.html', 
+        employees=all_employees, 
+        logs=logs, 
+        target_month=target_month, 
+        targets=processed_targets  # 替换原有targets，确保每个员工都有数据
+    )
 
 @app.route('/edit_log/<int:log_id>', methods=['GET', 'POST'])
 @login_required
