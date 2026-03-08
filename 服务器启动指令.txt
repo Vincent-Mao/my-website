@@ -1,3 +1,14 @@
-cd /var/www/html/
-source venv/bin/activate
-gunicorn --workers 1 --bind 0.0.0.0:8000 app:app > myapp.log 2>&1 &
+[Unit]
+Description=Flask Web Application  
+After=network.target  
+
+[Service]
+User=root  
+WorkingDirectory=/var/www/html  
+ExecStart=/usr/bin/python3 /var/www/html/app.py  
+Restart=always  
+RestartSec=5  
+Environment="PATH=/usr/bin:/usr/local/bin"  
+
+[Install]
+WantedBy=multi-user.target  
