@@ -12,8 +12,9 @@ app = Flask(__name__)
 app.secret_key = 'BOSS_SECRET_KEY_888'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///team_performance.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# 优化：延长缓存时间（默认10分钟→1小时），仅在数据变更时清空
 app.config['CACHE_TYPE'] = 'SimpleCache'
-app.config['CACHE_DEFAULT_TIMEOUT'] = 600
+app.config['CACHE_DEFAULT_TIMEOUT'] = 3600  # 缓存1小时
 db = SQLAlchemy(app)
 cache = Cache(app)
 
@@ -68,6 +69,19 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# 优化：新增「精准清空看板缓存」函数（按月份清空，而非全量）
+def clear_dashboard_cache(month=None):
+    """
+    清空指定月份的看板缓存，month=None 则清空所有
+    """
+    if month:
+        # 构造缓存key（和@cache.cached的query_string对应）
+        cache_key = f"view/dashboard?month={month}"
+        cache.delete_memoized(app.view_functions['dashboard'], cache_key)
+    else:
+        # 清空所有看板缓存
+        cache.delete_memoized(app.view_functions['dashboard'])
+
 def init_system():
     with app.app_context():
         db.create_all()
@@ -92,14 +106,15 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+# 优化：缓存策略保留，但仅在数据变更时清空
 @app.route('/dashboard')
 @login_required
-@cache.cached(timeout=600, query_string=True)
+@cache.cached(timeout=3600, query_string=True)  # 缓存1小时，按月份（query_string）区分缓存
 def dashboard():
     req_month = request.args.get('month', datetime.date.today().strftime('%Y-%m'))
     employees = Employee.query.all()
     
-    # 数据库聚合查询
+    # 数据库聚合查询（仅首次/缓存清空后执行）
     daily_loan_query = db.session.query(
         DailyLog.date,
         func.sum(DailyLog.loan_amount).label('total_loan')
@@ -127,8 +142,7 @@ def dashboard():
     team_total = {'total_data_count': 0, 'loan_orders': 0, 'loan_amount': 0.0, 'target_loan': 0.0, 'target_orders': 0}
     target_dict = {tgt.name: tgt for tgt in MonthlyTarget.query.filter_by(month=req_month).all()}
     
-    # 修复：用Python内置的enumerate生成索引，替代Jinja2的loop.index
-    for idx, emp in enumerate(employees, 1):  # 从1开始计数
+    for idx, emp in enumerate(employees, 1):
         emp_logs = user_logs.get(emp.name, [])
         tgt = target_dict.get(emp.name, MonthlyTarget(target_loan=100.0, target_orders=10))
         
@@ -147,7 +161,6 @@ def dashboard():
             'achieve': round((loan_amt / float(tgt.target_loan) * 100), 2) if tgt.target_loan > 0 else 0,
             'convert': round((orders / total_data * 100), 2) if total_data > 0 else 0,
             'daily_logs': sorted(emp_logs, key=lambda x: x.date, reverse=True),
-            # 修复：用Python的idx生成唯一ID，传给前端
             'collapse_id': f"collapse-{idx}"
         })
         team_total['loan_amount'] += loan_amt
@@ -174,7 +187,8 @@ def dashboard():
 @login_required
 @admin_required
 def clear_cache():
-    cache.clear()
+    # 优化：清空所有看板缓存（保留原功能）
+    clear_dashboard_cache()
     flash('数据缓存已清空，下次访问将加载最新数据', 'success')
     return redirect(url_for('dashboard'))
 
@@ -191,7 +205,11 @@ def entry():
             log.loan_orders, log.loan_amount, log.next_day_est = int(request.form['orders']), float(request.form['amount']), float(request.form['next_est'])
             db.session.add(log)
             db.session.commit()
-            cache.clear()
+            
+            # 优化：仅清空当前日期所属月份的缓存（精准清空）
+            log_month = date[:7]  # 从 "2026-03-08" 提取 "2026-03"
+            clear_dashboard_cache(log_month)
+            
             flash('数据提交成功', 'success')
         except Exception as e:
             print(f"提交数据错误：{e}")
@@ -199,54 +217,50 @@ def entry():
         return redirect(url_for('entry'))
     return render_template('entry.html', employees=[e.name for e in Employee.query.all()], today=today_str, today_logs=DailyLog.query.filter_by(date=today_str).all())
 
-# ================= 核心修改：admin_panel 路由 =================
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def admin_panel():
-    # 1. 获取当前选中的月份（默认当月）
     target_month = request.args.get('target_month', datetime.date.today().strftime('%Y-%m'))
     
     if request.method == 'POST':
         action, name = request.form.get('action'), request.form.get('name')
         try:
             if action == 'add':
-                # 添加员工时，自动为当前月份创建默认目标
                 db.session.add(Employee(name=name))
                 db.session.add(MonthlyTarget(name=name, month=target_month))
+                # 优化：添加员工后清空所有月份缓存（影响所有看板）
+                clear_dashboard_cache()
             elif action == 'delete':
-                # 删除员工时，级联删除所有相关数据
                 Employee.query.filter_by(name=name).delete()
                 DailyLog.query.filter_by(name=name).delete()
                 MonthlyTarget.query.filter_by(name=name).delete()
+                # 优化：删除员工后清空所有月份缓存
+                clear_dashboard_cache()
             elif action == 'update_target':
-                # 更新目标时，没有则创建
                 t = MonthlyTarget.query.filter_by(name=name, month=request.form.get('month')).first()
-                if not t:  # 如果该月份没有目标记录，新建
+                if not t:
                     t = MonthlyTarget(name=name, month=request.form.get('month'))
                 t.target_loan, t.target_orders = float(request.form.get('target_loan')), int(request.form.get('target_orders'))
-                db.session.add(t)  # 新增/更新都用add
+                db.session.add(t)
+                # 优化：更新目标后清空对应月份的缓存
+                clear_dashboard_cache(request.form.get('month'))
             db.session.commit()
-            cache.clear()
             flash('操作成功', 'success')
         except Exception as e:
-            db.session.rollback()  # 出错回滚
+            db.session.rollback()
             print(f"管理员操作错误：{e}")
             flash('操作失败', 'danger')
     
-    # 2. 关键修复：先查所有员工，再补全对应月份的目标数据
-    all_employees = Employee.query.all()  # 所有在职员工
+    all_employees = Employee.query.all()
     existing_targets = MonthlyTarget.query.filter_by(month=target_month).all()
-    target_dict = {tgt.name: tgt for tgt in existing_targets}  # 已有目标的员工
+    target_dict = {tgt.name: tgt for tgt in existing_targets}
     
-    # 3. 为每个员工生成目标数据（无则初始化默认值）
     processed_targets = []
     for emp in all_employees:
         if emp.name in target_dict:
-            # 已有目标 → 直接用
             processed_targets.append(target_dict[emp.name])
         else:
-            # 无目标 → 生成默认目标（不入库，仅前端显示）
             default_target = MonthlyTarget(
                 name=emp.name,
                 month=target_month,
@@ -255,16 +269,14 @@ def admin_panel():
             )
             processed_targets.append(default_target)
     
-    # 4. 查询日志（保持原有逻辑）
     logs = DailyLog.query.order_by(DailyLog.timestamp.desc()).limit(20).all()
     
-    # 5. 传给前端：所有员工 + 处理后的目标 + 选中月份
     return render_template(
         'admin.html', 
         employees=all_employees, 
         logs=logs, 
         target_month=target_month, 
-        targets=processed_targets  # 替换原有targets，确保每个员工都有数据
+        targets=processed_targets
     )
 
 @app.route('/edit_log/<int:log_id>', methods=['GET', 'POST'])
@@ -285,7 +297,11 @@ def edit_log(log_id):
             log.next_day_est = float(request.form.get('next_est', log.next_day_est))
             log.timestamp = datetime.datetime.now()
             db.session.commit()
-            cache.clear()
+            
+            # 优化：修改日志后清空对应月份的缓存
+            log_month = log.date[:7]
+            clear_dashboard_cache(log_month)
+            
             flash('修改成功', 'success')
         except Exception as e:
             print(f"修改日志错误：{e}")
